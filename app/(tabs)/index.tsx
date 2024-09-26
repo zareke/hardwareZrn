@@ -1,70 +1,146 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
+import { Accelerometer } from 'expo-sensors';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SMS from 'expo-sms';
+import * as Linking from 'expo-linking';
 
 export default function HomeScreen() {
+  const [{ x, y, z }, setData] = useState({ x: 0, y: 0, z: 0 });
+  const [subscription, setSubscription] = useState<any>(null);
+  const [isAvailable, setIsAvailable] = useState(false);
+
+  const SHAKE_THRESHOLD = 1.5;
+  const SHAKE_TIMEOUT = 1000;
+  let lastShakeTime = 0;
+
+  useEffect(() => {
+    checkAccelerometerAvailability();
+    return () => _unsubscribe();
+  }, []);
+
+  const checkAccelerometerAvailability = async () => {
+    if (Platform.OS === 'web') {
+      setIsAvailable(false);
+      Alert.alert('Aviso', 'La detección de sacudidas no está disponible en entornos web.');
+      return;
+    }
+
+    try {
+      const available = await Accelerometer.isAvailableAsync();
+      setIsAvailable(available);
+      if (available) {
+        _subscribe();
+      } else {
+        Alert.alert('Aviso', 'La detección de sacudidas no está disponible en este dispositivo.');
+      }
+    } catch (error) {
+      console.error('Error al verificar la disponibilidad del acelerómetro:', error);
+      setIsAvailable(false);
+      Alert.alert('Error', 'No se pudo verificar la disponibilidad de la detección de sacudidas.');
+    }
+  };
+
+  const _subscribe = () => {
+    try {
+      setSubscription(
+        Accelerometer.addListener(accelerometerData => {
+          setData(accelerometerData);
+          detectShake(accelerometerData);
+        })
+      );
+    } catch (error) {
+      console.error('Error al suscribirse al acelerómetro:', error);
+      Alert.alert('Error', 'No se pudo inicializar el detector de sacudidas.');
+    }
+  };
+
+  const _unsubscribe = () => {
+    subscription && subscription.remove();
+    setSubscription(null);
+  };
+
+  const detectShake = (data: { x: number; y: number; z: number }) => {
+    const now = Date.now();
+    if (now - lastShakeTime < SHAKE_TIMEOUT) return;
+
+    const force = Math.abs(data.x) + Math.abs(data.y) + Math.abs(data.z);
+    if (force > SHAKE_THRESHOLD) {
+      lastShakeTime = now;
+      enviarMensajeEmergencia();
+    }
+  };
+
+  const enviarMensajeEmergencia = async () => {
+    try {
+      const numeroEmergencia = await AsyncStorage.getItem('numeroEmergencia');
+      if (numeroEmergencia) {
+        const mensaje = '¡Emergencia! Necesito ayuda.';
+        
+        // Intentar enviar SMS
+        const isAvailable = await SMS.isAvailableAsync();
+        if (isAvailable) {
+          const { result } = await SMS.sendSMSAsync(numeroEmergencia, mensaje);
+          if (result === 'sent') {
+            Alert.alert('Éxito', 'Mensaje de emergencia enviado por SMS');
+            return;
+          }
+        }
+        
+        // Si el SMS falla o no está disponible, intentar con WhatsApp
+        const whatsappUrl = `whatsapp://send?phone=${numeroEmergencia}&text=${encodeURIComponent(mensaje)}`;
+        const canOpen = await Linking.canOpenURL(whatsappUrl);
+        if (canOpen) {
+          await Linking.openURL(whatsappUrl);
+          Alert.alert('Éxito', 'Mensaje de emergencia enviado por WhatsApp');
+        } else {
+          Alert.alert('Error', 'No se pudo enviar el mensaje de emergencia');
+        }
+      } else {
+        Alert.alert('Error', 'No hay número de emergencia configurado');
+      }
+    } catch (error) {
+      console.error('Error al enviar mensaje de emergencia:', error);
+      Alert.alert('Error', 'No se pudo enviar el mensaje de emergencia');
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      <Text style={styles.title}>BIENVENIDO/A A LA MEJOR APLICACIÓN DEL MUNDO!</Text>
+      <Text style={styles.subtitle}>
+        P.D. Si sacudes el dispositivo en esta pantalla se enviará un mensaje de emergencia al número configurado en la sección Emergencia.
+      </Text>
+      {isAvailable ? (
+        <Text style={styles.shakeStatus}>Detección de sacudidas activada</Text>
+      ) : (
+        <Text style={styles.shakeStatus}>Detección de sacudidas no disponible</Text>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
+    padding: 20,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  subtitle: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  shakeStatus: {
+    fontSize: 14,
+    color: 'gray',
+    textAlign: 'center',
   },
 });
