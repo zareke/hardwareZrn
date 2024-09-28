@@ -21,7 +21,7 @@ const Emergencia: React.FC = () => {
   };
 
   const guardarNumeroEmergencia = async () => {
-    if (numeroEmergencia.length < 10) {
+    if (numeroEmergencia.length != 10) {
       Alert.alert('Error', 'Por favor, ingrese un número de teléfono válido');
       return;
     }
@@ -44,7 +44,7 @@ const Emergencia: React.FC = () => {
         placeholder="Ingrese el número de emergencia"
         keyboardType="phone-pad"
       />
-      <Button title="Guardar Número" onPress={guardarNumeroEmergencia} />
+      <Button title="Guardar número" onPress={guardarNumeroEmergencia} />
     </View>
   );
 };
@@ -68,6 +68,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginBottom: 20,
     paddingHorizontal: 10,
+    backgroundColor: 'white', 
   },
 });
 

@@ -19,7 +19,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff",
-        "permissions": ["SEND_SMS", "READ_SMS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"]
+        "permissions": ["SEND_SMS", "READ_SMS", "ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION", "CONTACTS"]
       }
     },
     "web": {

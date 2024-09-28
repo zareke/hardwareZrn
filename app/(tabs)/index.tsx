@@ -4,13 +4,19 @@ import { Accelerometer } from 'expo-sensors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SMS from 'expo-sms';
 import * as Linking from 'expo-linking';
+import { useIsFocused } from '@react-navigation/native';
+
+type Subscription = {
+  remove: () => void;
+};
 
 export default function HomeScreen() {
   const [{ x, y, z }, setData] = useState({ x: 0, y: 0, z: 0 });
-  const [subscription, setSubscription] = useState<any>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isAvailable, setIsAvailable] = useState(false);
+  const isFocused = useIsFocused();
 
-  const SHAKE_THRESHOLD = 1.5;
+  const SHAKE_THRESHOLD = 5;
   const SHAKE_TIMEOUT = 1000;
   let lastShakeTime = 0;
 
@@ -18,6 +24,14 @@ export default function HomeScreen() {
     checkAccelerometerAvailability();
     return () => _unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (isFocused && isAvailable) {
+      _subscribe();
+    } else {
+      _unsubscribe();
+    }
+  }, [isFocused, isAvailable]);
 
   const checkAccelerometerAvailability = async () => {
     if (Platform.OS === 'web') {
@@ -29,9 +43,7 @@ export default function HomeScreen() {
     try {
       const available = await Accelerometer.isAvailableAsync();
       setIsAvailable(available);
-      if (available) {
-        _subscribe();
-      } else {
+      if (!available) {
         Alert.alert('Aviso', 'La detección de sacudidas no está disponible en este dispositivo.');
       }
     } catch (error) {
@@ -43,12 +55,12 @@ export default function HomeScreen() {
 
   const _subscribe = () => {
     try {
-      setSubscription(
-        Accelerometer.addListener(accelerometerData => {
-          setData(accelerometerData);
-          detectShake(accelerometerData);
-        })
-      );
+      _unsubscribe();
+      const newSubscription = Accelerometer.addListener(accelerometerData => {
+        setData(accelerometerData);
+        detectShake(accelerometerData);
+      });
+      setSubscription(newSubscription);
     } catch (error) {
       console.error('Error al suscribirse al acelerómetro:', error);
       Alert.alert('Error', 'No se pudo inicializar el detector de sacudidas.');
@@ -56,7 +68,9 @@ export default function HomeScreen() {
   };
 
   const _unsubscribe = () => {
-    subscription && subscription.remove();
+    if (subscription) {
+      subscription.remove();
+    }
     setSubscription(null);
   };
 
@@ -77,7 +91,6 @@ export default function HomeScreen() {
       if (numeroEmergencia) {
         const mensaje = '¡Emergencia! Necesito ayuda.';
         
-        // Intentar enviar SMS
         const isAvailable = await SMS.isAvailableAsync();
         if (isAvailable) {
           const { result } = await SMS.sendSMSAsync(numeroEmergencia, mensaje);
@@ -87,19 +100,8 @@ export default function HomeScreen() {
           }
         }
         
-        // Si el SMS falla o no está disponible, intentar con WhatsApp
-        const whatsappUrl = `whatsapp://send?phone=${numeroEmergencia}&text=${encodeURIComponent(mensaje)}`;
-        const canOpen = await Linking.canOpenURL(whatsappUrl);
-        if (canOpen) {
-          await Linking.openURL(whatsappUrl);
-          Alert.alert('Éxito', 'Mensaje de emergencia enviado por WhatsApp');
-        } else {
-          Alert.alert('Error', 'No se pudo enviar el mensaje de emergencia');
-        }
-      } else {
-        Alert.alert('Error', 'No hay número de emergencia configurado');
       }
-    } catch (error) {
+      }  catch (error) {
       console.error('Error al enviar mensaje de emergencia:', error);
       Alert.alert('Error', 'No se pudo enviar el mensaje de emergencia');
     }
@@ -111,7 +113,7 @@ export default function HomeScreen() {
       <Text style={styles.subtitle}>
         P.D. Si sacudes el dispositivo en esta pantalla se enviará un mensaje de emergencia al número configurado en la sección Emergencia.
       </Text>
-      {isAvailable ? (
+      {isAvailable && isFocused ? (
         <Text style={styles.shakeStatus}>Detección de sacudidas activada</Text>
       ) : (
         <Text style={styles.shakeStatus}>Detección de sacudidas no disponible</Text>
@@ -132,11 +134,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 20,
+    color: 'white',
   },
   subtitle: {
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
+    color: 'white',
   },
   shakeStatus: {
     fontSize: 14,

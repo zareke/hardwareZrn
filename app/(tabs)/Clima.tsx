@@ -62,14 +62,14 @@ const Clima: React.FC = () => {
           <Text>Probabilidad de lluvia: {currentWeather.values.precipitationProbability}%</Text>
           <Text>Humedad: {currentWeather.values.humidity}%</Text>
           {location && (
-            <div>
+            <View>
             <Text>
               Latitud: {location.coords.latitude.toFixed(4)}
             </Text>
             <Text>
               Longitud: {location.coords.longitude.toFixed(4)}
             </Text>
-            </div>
+            </View>
           )}
         </View>
       ) : (
